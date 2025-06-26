@@ -49,8 +49,21 @@ download_release() {
 	version="$1"
 	filename="$2"
 
-	url=$(curl -s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/$GH_ORG/$GH_REPO/releases | grep -E "${version}/ghostscript.*x86_64.tgz" | sed 's|.*"\(https://.*\)"|\1|g')
+	url=$(
+		page=1
+		while true; do
+			response=$(curl -s -L "${curl_opts[@]}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/$GH_ORG/$GH_REPO/releases?page=$page&per_page=100")
+			if [ -z "$response" ] || [ "$(echo "$response" | tr -d '[:space:]')" = "[]" ]; then
+				break
+			fi
+			echo "$response"
+			page=$((page + 1))
+		done | grep -E "${version}/ghostscript.*x86_64.tgz" | sed 's|.*"\(https://.*\)"|\1|g' | head -n 1
+	)
 
+	if [ -z "$url" ]; then
+		fail "Could not find a release for version $version."
+	fi
 	echo "* Downloading $TOOL_NAME release $version..."
 	curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"
 }
